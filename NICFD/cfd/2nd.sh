@@ -75,7 +75,7 @@ if [ "$ADAPT_MESH_SIZE" = YES ]; then
 	sed -i 's/^\s*REF_ELEM_LENGTH=.*$/REF_ELEM_LENGTH= '$REF_LENGTH'/' su2.cfg
 fi
 
-mpirun -n 6 SU2_CFD su2.cfg 
+mpirun -n 4 SU2_CFD su2.cfg 
 
 # Set restart input file name in su2.cfg and restart
 
@@ -146,7 +146,7 @@ do
 		sed -i 's/^\s*REF_ELEM_LENGTH=.*$/REF_ELEM_LENGTH= '${REF_LENGTH}'/' su2.cfg
 	fi
 
-	mpirun -n 6 SU2_CFD su2.cfg 
+	mpirun -n 4 SU2_CFD su2.cfg 
 
 	cp solution.dat solution_interpolated.dat
 
