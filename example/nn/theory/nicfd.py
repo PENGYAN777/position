@@ -40,6 +40,7 @@ xx = []
 P2 = []
 T2 = []
 M2 = []
+P1 = []
 
 """
 1. input total conditions
@@ -119,7 +120,7 @@ me = ue/ce
 """
 5. Loop for different Me
 """
-Me = np.linspace(3.5,4, 5)
+Me = np.linspace(me,4, 18)
 Me = pd.Series(Me)
 print("max Me < max mmm !!!  : ", Me.iloc[-1], mmm[-1])
 Pe = np.zeros(Me.size) 
@@ -201,9 +202,9 @@ for j in Me.index:
                 if abs(diff[i])<0.01:
                     break
             # print("index for P1:" , i )
-            P1 = p[i]
-            T1 = CP.CoolProp.PropsSI('T','P',P1,'Smass',s1,fluidname)
-            d1 = CP.CoolProp.PropsSI('Dmass','P',P1,'T',T1,fluidname)
+            P1.append(p[i])
+            T1 = CP.CoolProp.PropsSI('T','P',p[i],'Smass',s1,fluidname)
+            d1 = CP.CoolProp.PropsSI('Dmass','P', p[i],'T',T1,fluidname)
             u1 = u[i]
             # print("centerline condition; X/De, M, P[Pa], T[k] " , xx, M1, P1, T1 )
             break
@@ -212,14 +213,14 @@ for j in Me.index:
     5.2.Find post-shock states
     """
     n4 = 1000
-    p = np.linspace(P1*1.1,P1*20,n4) # 
+    p = np.linspace(P1[j]*1.1,P1[j]*(6*Me[j] - 4),n4) # must choose reasonable range
     p = pd.Series(p)
     h = np.zeros(p.size) 
     d = np.zeros(p.size) 
     u = np.zeros(p.size) 
     diff = np.zeros(p.size)
     for i in p.index:
-        u[i] = (P1+d1*u1*u1-p[i])/d1/u1
+        u[i] = (P1[j]+d1*u1*u1-p[i])/d1/u1
         if u[i]>0:
             d[i] =  d1*u1/u[i]
             h[i] = CP.CoolProp.PropsSI('Hmass','P',p[i],'Dmass',d[i],fluidname) 
@@ -247,12 +248,13 @@ for j in Me.index:
 # convert list to array
 xx = np.array(xx)
 P2 = np.array(P2)
+P1 = np.array(P1)
 T2 = np.array(T2)
 M2 = np.array(M2)
 
 pd.DataFrame(xx).to_csv('result.csv', index_label = "Index", header  = ['X/De'])
 data = pd.read_csv("result.csv", ",")
-D =pd.DataFrame({'Me': Me, 'M2': M2, 'P2/Pt': P2/Pt, 'T2/Tt': T2/Tt,})
+D =pd.DataFrame({'Me': Me, 'M2': M2, 'P2/Pt': P2/Pt, 'T2/Tt': T2/Tt,'P1/Pt': P1/Pt,})
 newData = pd.concat([data, D], join = 'outer', axis = 1)
 newData.to_csv("result.csv")
 
