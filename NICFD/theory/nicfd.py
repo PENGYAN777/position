@@ -13,6 +13,10 @@ import math
 import numpy as np
 import pandas as pd
 from RK4 import rk4
+import time
+
+# Start timer
+start_time = time.perf_counter()
 
 """
 0. fluid property
@@ -29,6 +33,12 @@ Tc =  CP.CoolProp.PropsSI("Tcrit",fluidname)
 print("critical temperature[K]:", Tc)
 Pc =  CP.CoolProp.PropsSI("pcrit",fluidname)
 print("critical pressure[Pa]:", Pc)
+
+# interasted variables need to write into csv file
+xx = []
+P2 = []
+T2 = []
+M2 = []
 
 """
 1. input total conditions
@@ -59,18 +69,19 @@ for i in p.index:
     u[i] = math.sqrt(abs(2*(ht1-h[i])))
     c[i] = CP.CoolProp.PropsSI('A','P',p[i],'T',t[i],fluidname) 
     m[i] = u[i]/c[i] 
-
+    if abs(m[i]-1)<0.01:
+        break
 """
 3. find sonic condition, assume A* = 1
 """
 print("index for sonic condition:",np.argmin(abs(m-1)))
-Ms = m[np.argmin(abs(m-1))]
-Ts = t[np.argmin(abs(m-1))]
-Ps = p[np.argmin(abs(m-1))]
+Ms = m[i]
+Ts = t[i]
+Ps = p[i]
 print("sonic P,T,M: ", Ps, Ts, Ms)
 ds = CP.CoolProp.PropsSI('Dmass','T',Ts,'P',Ps,fluidname)
-cs = c[np.argmin(abs(m-1))]
-us = u[np.argmin(abs(m-1))]
+cs = c[i]
+us = u[i]
 
 """
 4. For Dr = De/Ds, find exit condition using constant mass flow
@@ -89,13 +100,14 @@ for i in p.index:
     d[i] = CP.CoolProp.PropsSI('Dmass','P',p[i],'Smass',s1, fluidname) 
     h[i] = CP.CoolProp.PropsSI('Hmass','Dmass',d[i],'P',p[i],fluidname)
     u[i] = math.sqrt(abs(2*(ht1-h[i])))
-    diff[i] = ds*us - d[i]*u[i]*(Dr**2)
-    
-print("index for exit condition:",np.argmin(abs(diff)))
-de = d[np.argmin(abs(m-1))]
-Pe = p[np.argmin(abs(m-1))]
+    diff[i] = (ds*us - d[i]*u[i]*(Dr**2))/ds/us
+    if abs(diff[i])<0.01:
+        break
+print("index for exit condition:",i)
+de = d[i]
+Pe = p[i]
 Te = CP.CoolProp.PropsSI('T','Dmass',de,'P',Pe,fluidname)
-ue = u[np.argmin(abs(m-1))]
+ue = u[i]
 ce = CP.CoolProp.PropsSI('A','P|gas',Pe,'T',Te,fluidname)
 Me = ue/ce 
 print("exit P,T,M: ", Pe, Te, Me)    
@@ -147,24 +159,80 @@ for i in k.index:
     mu[i+1] = np.arcsin(1/M[i+1])
     if y[i+1]>0:
         M1 = M[i+1]
-        xx = x[i]/De
+        xx.append(x[i]/De)
         p = np.linspace(Pe*0.05,Pe,n2) # 
         p = pd.Series(p)
         h = np.zeros(p.size) 
-        d = np.zeros(p.size) 
-        u = np.zeros(p.size) # velocity
+        c = np.zeros(p.size) 
+        u = np.zeros(p.size) 
         diff = np.zeros(p.size)
         for i in p.index:
             c[i] = CP.CoolProp.PropsSI('A','P',p[i],'Smass',s1,fluidname)
             h[i] = CP.CoolProp.PropsSI('Hmass','P',p[i],'Smass',s1,fluidname)
             u[i] = M1*c[i]
-            diff[i] = ht1 - h[i] - 0.5*u[i]*u[i] 
-        print("index for P1:" , np.argmin(abs(diff)) )
-        P1 = p[np.argmin(abs(diff))]
+            diff[i] = (ht1 - h[i] - 0.5*u[i]*u[i])/ht1 
+            if abs(diff[i])<0.01:
+                break
+        print("index for P1:" , i )
+        P1 = p[i]
         T1 = CP.CoolProp.PropsSI('T','P',P1,'Smass',s1,fluidname)
+        d1 = CP.CoolProp.PropsSI('Dmass','P',P1,'T',T1,fluidname)
+        u1 = u[i]
         print("centerline condition; X/De, M, P[Pa], T[k] " , xx, M1, P1, T1 )
         break
 
 """
 6.Find post-shock states
 """
+n4 = 200
+p = np.linspace(P1*1.1,P1*3.0,n4) # 
+p = pd.Series(p)
+h = np.zeros(p.size) 
+d = np.zeros(p.size) 
+u = np.zeros(p.size) 
+diff = np.zeros(p.size)
+for i in p.index:
+    u[i] = (P1+d1*u1*u1-p[i])/d1/u1
+    if u[i]>0:
+        d[i] =  d1*u1/u[i]
+        h[i] = CP.CoolProp.PropsSI('Hmass','P',p[i],'Dmass',d[i],fluidname) 
+        diff[i] = (ht1 - 0.5*u[i]*u[i] - h[i])/ht1
+        if abs(diff[i])<0.01:
+            break
+print("index for P2:" , i )
+P2.append(p[i])
+d2 = d[i]
+T2.append( CP.CoolProp.PropsSI('T','P',p[i],'Dmass',d2,fluidname)  )
+c2 = CP.CoolProp.PropsSI('A','P',p[i],'Dmass',d2,fluidname) 
+u2 = u[i]
+M2.append( u2/c2 ) 
+print("post-shock condition; M2, P2[Pa], T[k] " ,  M2, P2, T2 )
+
+
+"""
+7. write results into csv file
+"""
+# convert list to array
+xx = np.array(xx)
+P2 = np.array(P2)
+T2 = np.array(T2)
+M2 = np.array(M2)
+
+pd.DataFrame(xx).to_csv('result.csv', index_label = "Index", header  = ['X/De'])
+data = pd.read_csv("result.csv", ",")
+D =pd.DataFrame({'M2': M2, 'P2/Pt': P2/Pt, 'T2/Tt': T2/Tt,})
+newData = pd.concat([data, D], join = 'outer', axis = 1)
+newData.to_csv("result.csv")
+
+
+
+"""
+output computational time
+"""
+# End timer
+end_time = time.perf_counter()
+
+
+# Calculate elapsed time
+elapsed_time = end_time - start_time
+print("Elapsed time: ", elapsed_time)
