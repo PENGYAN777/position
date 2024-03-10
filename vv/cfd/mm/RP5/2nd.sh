@@ -84,7 +84,7 @@ sed -i 's/^\s*RESTART_SOL=.*$/RESTART_SOL= YES/' su2.cfg # THIS IS FOR RESTART A
 sed -i 's/^\s*ITER=.*$/ITER= 1000/' su2.cfg
 sed -i 's/^\s*MUSCL_FLOW=.*$/MUSCL_FLOW= YES/' su2.cfg
 sed -i 's/^\s*SOLUTION_FILENAME=.*$/SOLUTION_FILENAME= 'solution_interpolated.dat'/' su2.cfg
-sed -i 's/^\s*MARKER_RIEMANN=.*$/MARKER_RIEMANN= ( 1, TOTAL_CONDITIONS_PT, 8e5, 500, 1.0, 0.0, 0.0, 4, TOTAL_CONDITIONS_PT, 1.6e5, 300, 1.0, 0.0, 0.0, 5, STATIC_PRESSURE, 1.6e5, 0, 0, 0, 0)/' su2.cfg
+sed -i 's/^\s*MARKER_RIEMANN=.*$/MARKER_RIEMANN= ( 1, TOTAL_CONDITIONS_PT, 8e5, 500, 1.0, 0.0, 0.0, 4, TOTAL_CONDITIONS_PT, 1.6e5, 450, 1.0, 0.0, 0.0, 5, STATIC_PRESSURE, 1.6e5, 0, 0, 0, 0)/' su2.cfg
 
 cp solution.dat solution_interpolated.dat
 
