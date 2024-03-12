@@ -10,6 +10,28 @@ import matplotlib.pyplot as plt
 import math
 import CoolProp as CP
 
+
+
+"""
+Isentropic relation
+"""
+
+def PPtFromM(M,g):
+    """
+
+    Parameters
+    ----------
+    M : Mach number
+    g : cp/cv
+
+    Returns P/Pt
+    -------
+    """
+    f1 = 1+(g-1)/2*M*M
+    f2 = -g/(g-1)
+    PPt = f1**(f2)
+    return PPt
+
 def NuFromM(M,g):
     """
 
@@ -28,6 +50,10 @@ def NuFromM(M,g):
     nu = math.sqrt(f1)*math.atan(math.sqrt(f2)) - math.atan(math.sqrt(f3))
     return nu
 
+"""
+Normal shock relation
+"""
+
 def M2FromM1(M1,g):
     """
 
@@ -43,18 +69,17 @@ def M2FromM1(M1,g):
     M2 = math.sqrt(M2)
     return M2
     
-def P2FromP1(P1,M1,g):
+def P2P1FromP1(M1,g):
     """
 
     Parameters
     ----------
     M : Mach number
     g : cp/cv
-    P1: pre-shock pressure
 
-    Returns P2
+    Returns P2/P1
     -------
     """
-    P2 = P1*(2*g*M1*M1/(g+1) - (g-1)/(g+1))
+    P2 = 2*g*M1*M1/(g+1) - (g-1)/(g+1)
     return P2
     

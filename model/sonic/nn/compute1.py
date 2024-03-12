@@ -22,168 +22,75 @@ start_time = time.perf_counter()
 """
 0. fluid property
 """
-fluidname = "nitrogen"
-print("Fluid name:", fluidname)
-R = CP.CoolProp.PropsSI("gas_constant",fluidname)
-print("universal gas constant:  J/mol/K", R)
-W = CP.CoolProp.PropsSI("molar_mass",fluidname)
-print("molar mass: kg/mol", W)
-Rs = R/W
-print("spefific ags constant: J/Kg/K", Rs)
-Tc =  CP.CoolProp.PropsSI("Tcrit",fluidname)
-print("critical temperature[K]:", Tc)
-Pc =  CP.CoolProp.PropsSI("pcrit",fluidname)
-print("critical pressure[Pa]:", Pc)
-gamma = 1.4
 
-# interasted variables need to write into csv file
-xx = []
-P2 = []
-T2 = []
-M2 = []
-P1 = []
+g = 1.4 # gamma = cp/cv
+
 
 """
 1. input total conditions
 """
-
-Pt = 1e7# total pressure
-Tt = 400
-print("total P,T, gamma: ", Pt, Tt, gamma)
-s1 = CP.CoolProp.PropsSI('Smass','P',Pt,'T',Tt,fluidname) 
-ht1 = CP.CoolProp.PropsSI('Hmass','P',Pt,'T',Tt,fluidname) 
-Pa = 1e5 # ambient pressure
+# non-dimensional
+Pt = 1
+Tt = 1
 
 """
-2. compute isentropic relationship
+2. find sonic condition, assume A* = 1.001
 """
 
-n1 = 100
-p = np.linspace(Pt,Pt*0.01,n1) # 
-p = pd.Series(p)
-h = np.zeros(p.size) # enthalpy
-u = np.zeros(p.size) # velocity
-c = np.zeros(p.size) # sound speed
-m = np.zeros(p.size) # Mach number
-t = np.zeros(p.size) # temperature
-
-
-for i in p.index:
-    t[i] = CP.CoolProp.PropsSI('T','P',p[i],'Smass',s1, fluidname) 
-    h[i] = CP.CoolProp.PropsSI('Hmass','T',t[i],'P',p[i],fluidname)
-    u[i] = math.sqrt(abs(2*(ht1-h[i])))
-    c[i] = CP.CoolProp.PropsSI('A','P',p[i],'T',t[i],fluidname) 
-    m[i] = u[i]/c[i] 
-    if abs(m[i]-1)<0.01:
-        break
-"""
-3. find sonic condition, assume A* = 1
-"""
-Ms = m[i]
-Ts = t[i]
-Ps = p[i]
-print("sonic index, P,T,M: ", i, Ps, Ts, Ms)
-ds = CP.CoolProp.PropsSI('Dmass','T',Ts,'P',Ps,fluidname)
-cs = c[i]
-us = u[i]
-
-# use sonic condition to compute Prandtl Meyer angle
-# vvv,ttt,mmm,nununu = rk4(1/ds, 30/ds, Ts, 1, 0, 1000)
+Ms = 1.001
+Ps = PPtFromM(Ms,g)*Pt
 
 """
-4. For Dr = De/Ds, find nozzle exit condition using constant mass flow
+3. Loop for different Mach 
 """
-# Me = 1.001 for sonic flow 
-De = 6.000015
-Ds = 6
-Dr = De/Ds
-n2 = 500
-p = np.linspace(Ps,Ps*0.1,n2) # 
-p = pd.Series(p)
-h = np.zeros(p.size) 
-d = np.zeros(p.size) 
-u = np.zeros(p.size) # velocity
-diff = np.zeros(p.size)
-for i in p.index:
-    d[i] = CP.CoolProp.PropsSI('Dmass','P',p[i],'Smass',s1, fluidname) 
-    h[i] = CP.CoolProp.PropsSI('Hmass','Dmass',d[i],'P',p[i],fluidname)
-    u[i] = math.sqrt(abs(2*(ht1-h[i])))
-    diff[i] = (ds*us - d[i]*u[i]*(Dr**2))/ds/us
-    # if abs(diff[i])<0.01:
-    #     break
-# print("index for exit condition:",i)
-i = np.argmin(abs(diff))
-de = d[i]
-pe = p[i]
-Te = CP.CoolProp.PropsSI('T','Dmass',de,'P',pe,fluidname)
-ue = u[i]
-ce = CP.CoolProp.PropsSI('A','P|gas',pe,'T',Te,fluidname)
-me = ue/ce 
-
-print("exit index,  P,T,M: ", i, pe, Te, me)    
-"""
-# 5. Loop for different Mach 
-# """
 # prepare NufromM
-Mi = np.linspace(1, 10, 100)
+Mi = np.linspace(Ms, 10, 100)
 Mi = pd.Series(Mi)
 Nui = np.zeros(Mi.size) 
 for i in Mi.index:
-    Nui[i] = NuFromM(Mi[i],gamma)
+    Nui[i] = NuFromM(Mi[i],g)
 
-Me = np.linspace(me, 3.5, 15)
+# range of Mach
+Me = np.linspace(Ms, 5, 20)
 Me = pd.Series(Me)
-# print("delta M must be > delta mmm !!!; ",  Me[1]-Me[0] ,mmm[1]-mmm[0])
-# print("max Me < max mmm !!!  : ", Me.iloc[-1], mmm[-1])
-Pe = np.zeros(Me.size) 
+Pe = np.zeros(Me.size)  
+De = 1 # Diameter of nozzle exit
+xx = np.zeros(Me.size)  
+M1 = np.zeros(Me.size)  
+M2 = np.zeros(Me.size)  
+P1 = np.zeros(Me.size)  
+P2 = np.zeros(Me.size)  
+
+dx = De*0.005 # Delta x
+n1 = 600  # large n for large M
+print("max X/De: ", n1*dx)
+k = np.zeros(n1-1) # number of inetraion, n-1
+k = pd.Series(k)
 for j in Me.index:
     print("j = ", j)
     """
-    5.0 Find Pe, Te for different Me
+    3.1 Find Pe, Te for different Me
     """
-    p = np.linspace(pe,Pt*0.01,500) # 
-    p = pd.Series(p)
-    h = np.zeros(p.size) 
-    c = np.zeros(p.size) 
-    u = np.zeros(p.size) 
-    diff = np.zeros(p.size)
-    for i in p.index:
-        c[i] = CP.CoolProp.PropsSI('A','P',p[i],'Smass',s1,fluidname)
-        u[i] = Me[j]*c[i]
-        h[i] = CP.CoolProp.PropsSI('Hmass','P',p[i],'Smass',s1,fluidname)
-        diff[i] = (ht1 - h[i] - 0.5*u[i]*u[i])/ht1 
-        # if abs(diff[i])<0.01:
-        #     Pe[j] = p[i]
-        #     break    
-    i = np.argmin(abs(diff))
-    Pe[j] = p[i]
+    Pe[j] = PPtFromM(Me[j],g)*Pt
     """
-    5.1 Find X/De by solving MOC
+    3.2 Find X/De by solving MOC
     """
-    dx = De/200 # Delta x
-    n3 = 600  # large n for large M
-    k = np.zeros(n3-1) # number of inetraion, n-1
-    k = pd.Series(k)
     # initialization
-    x = np.zeros(n3)
+    x = np.zeros(n1)
     x = pd.Series(x)
     x[0] = 0 # 
-    y = np.zeros(n3)
+    y = np.zeros(n1)
     y[0] = -De/2 #  
-    dy = np.zeros(n3)
+    dy = np.zeros(n1)
     dy[0] = 0 #  
-    M = np.zeros(n3)
+    M = np.zeros(n1)
     M[0] = Me[j] # Mach number
-    
-    mu = np.zeros(n3) 
+    mu = np.zeros(n1) 
     mu[0] = np.arcsin(1/M[0]) # Mach angle
-    nu = np.zeros(n3) 
-    nu[0] = NuFromM(M[0], gamma) # Prandtl Meyer angle
-    # print("index for nu0:",np.argmin(abs(mmm-Me)))
-    # print("initial nu:", nu[0])
-    theta = np.zeros(n3)
+    nu = np.zeros(n1) 
+    nu[0] = NuFromM(M[0], g) # Prandtl Meyer angle
+    theta = np.zeros(n1)
     theta[0] = 0 # flow angle
-    
     for i in k.index:
         dy[i] = dx*math.tan(theta[i]+mu[i])
         x[i+1] = x[i] + dx
@@ -200,78 +107,35 @@ for j in Me.index:
         M[i+1] = Mi[np.argmin(abs(Nui-nu[i+1]))]
         mu[i+1] = np.arcsin(1/M[i+1])
         if y[i+1]>0:
-            M1 = M[i+1]
-            xx.append(x[i]/De)
-            p = np.linspace(Pe[j],Pt*0.01,n2) # 
-            p = pd.Series(p)
-            h = np.zeros(p.size) 
-            c = np.zeros(p.size) 
-            u = np.zeros(p.size) 
-            diff = np.zeros(p.size)
-            for i in p.index:
-                c[i] = CP.CoolProp.PropsSI('A','P',p[i],'Smass',s1,fluidname)
-                h[i] = CP.CoolProp.PropsSI('Hmass','P',p[i],'Smass',s1,fluidname)
-                u[i] = M1*c[i]
-                diff[i] = (ht1 - h[i] - 0.5*u[i]*u[i])/ht1 
-                # if abs(diff[i])<0.01:
-                #     break
-            i = np.argmin(abs(diff))
-            # print("index for P1:" , i )
-            P1.append(p[i])
-            T1 = CP.CoolProp.PropsSI('T','P',p[i],'Smass',s1,fluidname)
-            d1 = CP.CoolProp.PropsSI('Dmass','P', p[i],'T',T1,fluidname)
-            u1 = u[i]
-            # print("centerline condition; X/De, M, P[Pa], T[k] " , xx, M1, P1, T1 )
+            M1[j] = M[i+1]
+            xx[j] = x[i]/De
+            P1[j] = PPtFromM(M1[j],g)*Pt
             break
-    
     """
-    5.2.Find post-shock states
+    3.3.Find post-shock states
     """
-    # n4 = 1000
-    # p = np.linspace(P1[j]*Me[j],P1[j]*(4*Me[j] - 3),n4) # must choose reasonable range
-    # p = pd.Series(p)
-    # h = np.zeros(p.size) 
-    # d = np.zeros(p.size) 
-    # u = np.zeros(p.size) 
-    # diff = np.zeros(p.size)
-    # for i in p.index:
-    #     diff[i] = 100
-    #     u[i] = (P1[j]+d1*u1*u1-p[i])/d1/u1
-    #     if u[i]>0:
-    #         d[i] =  d1*u1/u[i]
-    #         h[i] = CP.CoolProp.PropsSI('Hmass','P',p[i],'Dmass',d[i],fluidname) 
-    #         diff[i] = (ht1 - 0.5*u[i]*u[i] - h[i])/ht1
-    #         # if abs(diff[i])<0.01:
-    #         #     break
-    # i = np.argmin(abs(diff))
-    # P2.append(p[i])
-    # d2 = d[i]
-    # T2.append( CP.CoolProp.PropsSI('T','P',p[i],'Dmass',d2,fluidname)  )
-    # c2 = CP.CoolProp.PropsSI('A','P',p[i],'Dmass',d2,fluidname) 
-    # u2 = u[i]
-    # M2.append( u2/c2 ) 
-    M2.append(M2FromM1(M1,gamma))
-    P2.append(P2FromP1(P1[j],M1,gamma))
+    M2[j] = M2FromM1(M1[j],g)
+    P2[j] = P1[j]*P2P1FromP1(M1[j],g)
     print("------------------------------------------------------------")
-    print("post-shock condition; index, M1, M2, P2/Pt" ,  i,M1 , M2FromM1(M1,gamma), P2FromP1(P1[j],M1,gamma)/Pt )
+    print("post-shock condition; M1, M2,P1/Pt, P2/Pt" ,M1[j] , M2[j],P1[j]/Pt, P2[j]/Pt )
     print("------------------------------------------------------------")
 
-"""
-6. write results into csv file
-"""
-# convert list to array
-xx = np.array(xx)
-P2 = np.array(P2)
-P1 = np.array(P1)
-T2 = np.array(T2)
-M2 = np.array(M2)
 
-
+"""
+4. write results into csv file
+"""
 pd.DataFrame(xx).to_csv('result1.csv', index_label = "Index", header  = ['X/De'])
 data = pd.read_csv("result1.csv", ",")
-D =pd.DataFrame({'Me': Me, 'M2': M2, 'P2/Pt': P2/Pt, 'P1/Pt': P1/Pt,})
+D =pd.DataFrame({'M1': M1, 'M2': M2, 'P1/Pt': P1/Pt, 'P2/Pt': P2/Pt,})
 newData = pd.concat([data, D], join = 'outer', axis = 1)
 newData.to_csv("result1.csv")
+
+
+
+
+
+
+
 
 
 
