@@ -7,6 +7,7 @@ Created on Sun Mar 10 01:04:49 2024
 """
 
 import numpy as np
+import math
 import pandas as pd
 import matplotlib.pyplot as plt
 from matplotlib.ticker import FormatStrFormatter
@@ -17,18 +18,16 @@ get_ipython().magic('reset -sf')
 os.system('clear')
 
 result1 = pd.read_csv("result1.csv", ",", skiprows=0)
-result2 = pd.read_csv("result2.csv", ",", skiprows=0)
-result3 = pd.read_csv("result3.csv", ",", skiprows=0)
-result = pd.concat([result1, result2, result3])
+result = pd.concat([result1,  ])
 # axes.yaxis.set_major_formatter(FormatStrFormatter('%.2f'))
-
+gamma = 1.4
 
 # fig 1
 fig1 = plt.figure( dpi=300)
 lw = 2
 axes = fig1.add_axes([0.15, 0.15, 0.7, 0.7]) #size of figure
 axes.plot(result.iloc[:,2] ,result.iloc[:,-1], 'ko', lw=lw, label="$P_1/P_t$")
-axes.plot(result.iloc[:,2] ,result.iloc[:,-3], 'bo', lw=lw, label="$P_2/P_t$")
+axes.plot(result.iloc[:,2] ,result.iloc[:,-2], 'bo', lw=lw, label="$P_2/P_t$")
 
 # axes.set_xlim([0.5, 2])
 # axes.set_ylim([0,0.7])

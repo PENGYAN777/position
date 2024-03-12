@@ -13,7 +13,7 @@ import CoolProp as CP
 import math
 import numpy as np
 import pandas as pd
-from nufromM import rk4
+from function import *
 import time
 
 # Start timer
@@ -34,6 +34,7 @@ Tc =  CP.CoolProp.PropsSI("Tcrit",fluidname)
 print("critical temperature[K]:", Tc)
 Pc =  CP.CoolProp.PropsSI("pcrit",fluidname)
 print("critical pressure[Pa]:", Pc)
+gamma = 1.4
 
 # interasted variables need to write into csv file
 xx = []
@@ -46,8 +47,9 @@ P1 = []
 1. input total conditions
 """
 
-Pt = 8e5# total pressure
-Tt = 337
+Pt = 1e7# total pressure
+Tt = 400
+print("total P,T, gamma: ", Pt, Tt, gamma)
 s1 = CP.CoolProp.PropsSI('Smass','P',Pt,'T',Tt,fluidname) 
 ht1 = CP.CoolProp.PropsSI('Hmass','P',Pt,'T',Tt,fluidname) 
 Pa = 1e5 # ambient pressure
@@ -57,7 +59,7 @@ Pa = 1e5 # ambient pressure
 """
 
 n1 = 100
-p = np.linspace(Pt,Pt*0.1,n1) # 
+p = np.linspace(Pt,Pt*0.01,n1) # 
 p = pd.Series(p)
 h = np.zeros(p.size) # enthalpy
 u = np.zeros(p.size) # velocity
@@ -86,7 +88,7 @@ cs = c[i]
 us = u[i]
 
 # use sonic condition to compute Prandtl Meyer angle
-vvv,ttt,mmm,nununu = rk4(1/ds, 30/ds, Ts, 1, 0, 1000)
+# vvv,ttt,mmm,nununu = rk4(1/ds, 30/ds, Ts, 1, 0, 1000)
 
 """
 4. For Dr = De/Ds, find nozzle exit condition using constant mass flow
@@ -122,17 +124,24 @@ print("exit index,  P,T,M: ", i, pe, Te, me)
 """
 # 5. Loop for different Mach 
 # """
-Me = np.linspace(3.1, 3.7, 7)
+# prepare NufromM
+Mi = np.linspace(1, 10, 100)
+Mi = pd.Series(Mi)
+Nui = np.zeros(Mi.size) 
+for i in Mi.index:
+    Nui[i] = NuFromM(Mi[i],gamma)
+
+Me = np.linspace(3.5, 5, 10)
 Me = pd.Series(Me)
-print("delta M must be > delta mmm !!!; ",  Me[1]-Me[0] ,mmm[1]-mmm[0])
-print("max Me < max mmm !!!  : ", Me.iloc[-1], mmm[-1])
+# print("delta M must be > delta mmm !!!; ",  Me[1]-Me[0] ,mmm[1]-mmm[0])
+# print("max Me < max mmm !!!  : ", Me.iloc[-1], mmm[-1])
 Pe = np.zeros(Me.size) 
 for j in Me.index:
     print("j = ", j)
     """
     5.0 Find Pe, Te for different Me
     """
-    p = np.linspace(pe,Pt*0.01,500) # 
+    p = np.linspace(pe,Pt*0.001,500) # 
     p = pd.Series(p)
     h = np.zeros(p.size) 
     c = np.zeros(p.size) 
@@ -152,7 +161,7 @@ for j in Me.index:
     5.1 Find X/De by solving MOC
     """
     dx = De/200 # Delta x
-    n3 = 600 
+    n3 = 600  # large n for large M
     k = np.zeros(n3-1) # number of inetraion, n-1
     k = pd.Series(k)
     # initialization
@@ -169,7 +178,7 @@ for j in Me.index:
     mu = np.zeros(n3) 
     mu[0] = np.arcsin(1/M[0]) # Mach angle
     nu = np.zeros(n3) 
-    nu[0] = nununu[np.argmin(abs(mmm-M[0]))] # Prandtl Meyer angle
+    nu[0] = NuFromM(M[0], gamma) # Prandtl Meyer angle
     # print("index for nu0:",np.argmin(abs(mmm-Me)))
     # print("initial nu:", nu[0])
     theta = np.zeros(n3)
@@ -188,12 +197,12 @@ for j in Me.index:
             diff[ii] = math.cos(t2) - math.cos(t1) - dy[i]/dx*(math.sin(t2) - math.sin(t1)) 
         theta[i+1] = theta[i] + dtheta[np.argmin(abs(diff))]
         nu[i+1] = nu[i]  + theta[i+1] - theta[i] 
-        M[i+1] = mmm[np.argmin(abs(nununu-nu[i+1]))]
+        M[i+1] = Mi[np.argmin(abs(Nui-nu[i+1]))]
         mu[i+1] = np.arcsin(1/M[i+1])
         if y[i+1]>0:
             M1 = M[i+1]
             xx.append(x[i]/De)
-            p = np.linspace(Pe[j],Pt*0.01,n2) # 
+            p = np.linspace(Pe[j],Pt*0.001,n2) # 
             p = pd.Series(p)
             h = np.zeros(p.size) 
             c = np.zeros(p.size) 
@@ -218,37 +227,34 @@ for j in Me.index:
     """
     5.2.Find post-shock states
     """
-    n4 = 1000
-    p = np.linspace(P1[j]*10,P1[j]*(10*Me[j] - 20),n4) # must choose reasonable range
-    p = pd.Series(p)
-    h = np.zeros(p.size) 
-    d = np.zeros(p.size) 
-    u = np.zeros(p.size) 
-    diff = np.zeros(p.size)
-    for i in p.index:
-        diff[i] = 100
-        u[i] = (P1[j]+d1*u1*u1-p[i])/d1/u1
-        if u[i]>0:
-            d[i] =  d1*u1/u[i]
-            h[i] = CP.CoolProp.PropsSI('Hmass','P',p[i],'Dmass',d[i],fluidname) 
-            diff[i] = (ht1 - 0.5*u[i]*u[i] - h[i])/ht1
-            # if abs(diff[i])<0.01:
-            #     break
-    i = np.argmin(abs(diff))
-    P2.append(p[i])
-    d2 = d[i]
-    T2.append( CP.CoolProp.PropsSI('T','P',p[i],'Dmass',d2,fluidname)  )
-    c2 = CP.CoolProp.PropsSI('A','P',p[i],'Dmass',d2,fluidname) 
-    u2 = u[i]
-    M2.append( u2/c2 ) 
+    # n4 = 1000
+    # p = np.linspace(P1[j]*Me[j],P1[j]*(4*Me[j] - 3),n4) # must choose reasonable range
+    # p = pd.Series(p)
+    # h = np.zeros(p.size) 
+    # d = np.zeros(p.size) 
+    # u = np.zeros(p.size) 
+    # diff = np.zeros(p.size)
+    # for i in p.index:
+    #     diff[i] = 100
+    #     u[i] = (P1[j]+d1*u1*u1-p[i])/d1/u1
+    #     if u[i]>0:
+    #         d[i] =  d1*u1/u[i]
+    #         h[i] = CP.CoolProp.PropsSI('Hmass','P',p[i],'Dmass',d[i],fluidname) 
+    #         diff[i] = (ht1 - 0.5*u[i]*u[i] - h[i])/ht1
+    #         # if abs(diff[i])<0.01:
+    #         #     break
+    # i = np.argmin(abs(diff))
+    # P2.append(p[i])
+    # d2 = d[i]
+    # T2.append( CP.CoolProp.PropsSI('T','P',p[i],'Dmass',d2,fluidname)  )
+    # c2 = CP.CoolProp.PropsSI('A','P',p[i],'Dmass',d2,fluidname) 
+    # u2 = u[i]
+    # M2.append( u2/c2 ) 
+    M2.append(M2FromM1(M1,gamma))
+    P2.append(P2FromP1(P1[j],M1,gamma))
     print("------------------------------------------------------------")
-    print("post-shock condition; index, M1, M2, P2/Pt" ,  i,Me[j] ,u2/c2, p[i]/Pt )
+    print("post-shock condition; index, M1, M2, P2/Pt" ,  i,M1 , M2FromM1(M1,gamma), P2FromP1(P1[j],M1,gamma)/Pt )
     print("------------------------------------------------------------")
-    # if p[i] < Pa:
-    #     print("------------------------------------------------------------")
-    #     print("Find P2=Pa; index, Pa, P2" ,  j, Pa, p[i] )
-    #     print("------------------------------------------------------------")
-    #     break
 
 """
 6. write results into csv file
@@ -260,11 +266,12 @@ P1 = np.array(P1)
 T2 = np.array(T2)
 M2 = np.array(M2)
 
-pd.DataFrame(xx).to_csv('result3.csv', index_label = "Index", header  = ['X/De'])
-data = pd.read_csv("result3.csv", ",")
-D =pd.DataFrame({'Me': Me, 'M2': M2, 'P2/Pt': P2/Pt, 'T2/Tt': T2/Tt,'P1/Pt': P1/Pt,})
+
+pd.DataFrame(xx).to_csv('result1.csv', index_label = "Index", header  = ['X/De'])
+data = pd.read_csv("result1.csv", ",")
+D =pd.DataFrame({'Me': Me, 'M2': M2, 'P2/Pt': P2/Pt, 'P1/Pt': P1/Pt,})
 newData = pd.concat([data, D], join = 'outer', axis = 1)
-newData.to_csv("result3.csv")
+newData.to_csv("result1.csv")
 
 
 
