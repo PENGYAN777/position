@@ -48,8 +48,8 @@ lw = 2
 axes = fig2.add_axes([0.15, 0.15, 0.7, 0.7]) #size of figure
 axes.plot(m1.iloc[:,1] ,m1.iloc[:,2]/m1.iloc[:,1], 'ko', lw=lw)
 
-# axes.set_xlim([0.5, 2])
-# axes.set_ylim([0,0.7])
+# axes.set_xlim([0.75, 0.2])
+axes.set_ylim([1.10,1.45])
 axes.set_xlabel('$P_a/P_t$',fontsize=12)
 axes.set_ylabel('$P_2/P_a$',fontsize=12) 
 # axes.set_title('$P/P_t$ along nozzle centerline',fontsize=14)
